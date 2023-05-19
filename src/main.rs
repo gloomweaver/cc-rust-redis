@@ -1,6 +1,6 @@
 use anyhow::Result;
-use bytes::BytesMut;
-use redis_starter_rust::resp;
+use bytes::{BufMut, BytesMut};
+use redis_starter_rust::{command::Command, resp};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -30,51 +30,36 @@ async fn main() -> Result<()> {
 async fn handle_connection(mut stream: TcpStream) -> Result<()> {
     let mut buf = BytesMut::with_capacity(512);
     loop {
-        // Wait for the client to send us a message but ignore the content for now
         let bytes_read = stream.read_buf(&mut buf).await?;
         if bytes_read == 0 {
             println!("client closed the connection");
             break;
         }
+        if let Some((_, resp)) = resp::RespValue::from_bytes(&buf)? {
+            if let Some(command) = Command::from_resp_value(&resp) {
+                match command {
+                    Command::Ping(arg) => {
+                        let mut out = BytesMut::with_capacity(512);
+                        out.put_slice(b"+");
+                        out.put_slice(&arg.as_bytes());
+                        out.put_slice(b"\r\n");
 
-        let command = resp::RespValue::from_bytes(&buf[..bytes_read]);
-        match command {
-            Some(command) => match command {
-                resp::RespValue::Array(array) => {
-                    stream.write_all(b"").await?;
-                    match array.get(0) {
-                        Some(resp::RespValue::SimpleString(command)) => {
-                            if command == "ping" {
-                                stream.write_all(b"+PONG\r\n").await?;
-                            } else if command == "echo" {
-                                if let Some(arg) = array.get(1) {
-                                    if let resp::RespValue::SimpleString(arg) = arg {
-                                        stream.write_all(b"+").await?;
-                                        stream.write_all(arg.as_bytes()).await?;
-                                        stream.write_all(b"\r\n").await?;
-                                    }
-                                } else {
-                                    stream.write_all(b"-ERR unknown command\r\n").await?;
-                                }
-                            } else {
-                                stream.write_all(b"-ERR unknown command\r\n").await?;
-                            }
-                        }
-                        _ => {
-                            stream.write_all(b"-ERR unknown command\r\n").await?;
-                        }
+                        stream.write_all(&out).await?;
+                    }
+                    Command::Echo(arg) => {
+                        let mut out = BytesMut::with_capacity(512);
+                        out.put_slice(b"+");
+                        out.put_slice(&arg.as_bytes());
+                        out.put_slice(b"\r\n");
+
+                        stream.write_all(&out).await?;
                     }
                 }
-                _ => {
-                    println!("not an array");
-                    stream.write_all(b"-ERR unknown command\r\n").await?;
-                }
-            },
-            None => {
+            } else {
                 stream.write_all(b"-ERR unknown command\r\n").await?;
             }
+            buf.clear();
         }
-        buf.clear();
     }
     Ok(())
 }
