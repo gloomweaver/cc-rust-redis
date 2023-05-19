@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpListener,
-    str,
+    str, thread,
 };
 
 fn main() -> std::io::Result<()> {
@@ -10,18 +10,17 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
     for stream in listener.incoming() {
-        println!("new stream");
-        match stream {
+        thread::spawn(move || match stream {
             Ok(mut stream) => {
                 let mut payload = [0; 512];
                 loop {
-                    stream.read(&mut payload)?;
+                    stream.read(&mut payload).unwrap();
                     match str::from_utf8(&payload) {
                         Ok(data) => {
                             if data.contains("ping") {
-                                stream.write(b"+PONG\r\n")?;
+                                stream.write(b"+PONG\r\n").unwrap();
                             } else {
-                                stream.write(b"-ERR unknown command\r\n")?;
+                                stream.write(b"-ERR unknown command\r\n").unwrap();
                             }
                         }
                         Err(error) => println!("Invalid UTF-8 sequence: {}", error),
@@ -31,7 +30,7 @@ fn main() -> std::io::Result<()> {
             Err(e) => {
                 println!("error: {}", e);
             }
-        }
+        });
     }
 
     Ok(())
