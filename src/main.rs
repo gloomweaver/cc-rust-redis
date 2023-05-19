@@ -10,19 +10,22 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
     for stream in listener.incoming() {
+        println!("new stream");
         match stream {
             Ok(mut stream) => {
                 let mut payload = [0; 512];
-                stream.read(&mut payload)?;
-                match str::from_utf8(&payload) {
-                    Ok(data) => {
-                        if data.contains("ping") {
-                            stream.write(b"+PONG\r\n")?;
-                        } else {
-                            stream.write(b"-ERR unknown command\r\n")?;
+                loop {
+                    stream.read(&mut payload)?;
+                    match str::from_utf8(&payload) {
+                        Ok(data) => {
+                            if data.contains("ping") {
+                                stream.write(b"+PONG\r\n")?;
+                            } else {
+                                stream.write(b"-ERR unknown command\r\n")?;
+                            }
                         }
+                        Err(error) => println!("Invalid UTF-8 sequence: {}", error),
                     }
-                    Err(error) => println!("Invalid UTF-8 sequence: {}", error),
                 }
             }
             Err(e) => {
