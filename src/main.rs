@@ -11,9 +11,9 @@ use tokio::sync::Mutex;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cache = Arc::new(Mutex::new(HashMap::new()));
-    println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
+    println!("Listening on {}", listener.local_addr()?);
 
     loop {
         let incoming = listener.accept().await;

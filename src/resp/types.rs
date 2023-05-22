@@ -26,8 +26,8 @@ impl RespValue {
             RespValue::Error(s) => s.clone().into_bytes(),
             RespValue::Integer(i) => i.to_string().into_bytes(),
             RespValue::BulkString(s) => s.to_vec(),
-            RespValue::Array(_) => unimplemented!(),
-            RespValue::Nil => unimplemented!(),
+            RespValue::Array(_) => unreachable!(),
+            RespValue::Nil => unreachable!(),
         }
     }
 }
