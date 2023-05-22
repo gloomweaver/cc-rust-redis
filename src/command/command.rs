@@ -3,6 +3,8 @@ use super::super::resp::RespValue;
 pub enum Command {
     Ping(String),
     Echo(String),
+    Get(String),
+    Set(String, String),
 }
 
 impl Command {
@@ -36,6 +38,35 @@ impl Command {
                                 .expect("WHAT");
 
                             Some(Command::Echo(arg))
+                        }
+                        "get" => {
+                            let key = iter
+                                .next()
+                                .map(|arg| {
+                                    String::from_utf8_lossy(arg.as_bytes().clone().as_ref())
+                                        .to_string()
+                                })
+                                .expect("WHAT");
+
+                            Some(Command::Get(key))
+                        }
+                        "set" => {
+                            let key = iter
+                                .next()
+                                .map(|arg| {
+                                    String::from_utf8_lossy(arg.as_bytes().clone().as_ref())
+                                        .to_string()
+                                })
+                                .expect("WHAT");
+                            let value = iter
+                                .next()
+                                .map(|arg| {
+                                    String::from_utf8_lossy(arg.as_bytes().clone().as_ref())
+                                        .to_string()
+                                })
+                                .expect("WHAT");
+
+                            Some(Command::Set(key, value))
                         }
                         _ => None,
                     }

@@ -1,11 +1,16 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use anyhow::Result;
 use bytes::{BufMut, BytesMut};
 use redis_starter_rust::{command::Command, resp};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cache = Arc::new(Mutex::new(HashMap::new()));
     println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
@@ -15,9 +20,10 @@ async fn main() -> Result<()> {
         match incoming {
             Ok((stream, _)) => {
                 println!("new connection");
+                let memory = cache.clone();
 
                 tokio::spawn(async move {
-                    handle_connection(stream).await.unwrap();
+                    handle_connection(stream, memory).await.unwrap();
                 });
             }
             Err(e) => {
@@ -27,7 +33,10 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn handle_connection(mut stream: TcpStream) -> Result<()> {
+async fn handle_connection(
+    mut stream: TcpStream,
+    memory: Arc<Mutex<HashMap<String, String>>>,
+) -> Result<()> {
     let mut buf = BytesMut::with_capacity(512);
     loop {
         let bytes_read = stream.read_buf(&mut buf).await?;
@@ -53,6 +62,22 @@ async fn handle_connection(mut stream: TcpStream) -> Result<()> {
                         out.put_slice(b"\r\n");
 
                         stream.write_all(&out).await?;
+                    }
+                    Command::Get(key) => {
+                        let mut out = BytesMut::with_capacity(512);
+                        let mem = memory.lock().await;
+                        let val = mem.get(&key).unwrap();
+
+                        out.put_slice(b"+");
+                        out.put_slice(&val.as_bytes());
+                        out.put_slice(b"\r\n");
+
+                        stream.write_all(&out).await?;
+                    }
+                    Command::Set(key, value) => {
+                        let mut mem = memory.lock().await;
+                        mem.insert(key, value);
+                        stream.write_all(b"+OK\r\n").await?;
                     }
                 }
             } else {
